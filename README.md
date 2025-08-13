@@ -7,7 +7,7 @@ Install Roblox Studio at: https://create.roblox.com/
 # Rojo Setup (ALWAYS DO STEP 5, 7 and 8)
 1) Get the toolkit at: https://github.com/rojo-rbx/rokit or type the line below for windows
 
-Invoke-RestMethod https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.ps1 | Invoke-Expression
+`Invoke-RestMethod https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.ps1 | Invoke-Expression`
 
 2) Restart your computer
 3) Open VS Code and install the extensions "Luau Language Server" and "Rojo - Roblox Studio Sync"
