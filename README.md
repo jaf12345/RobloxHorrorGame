@@ -2,8 +2,6 @@ Protocol: Ascend is a game made on ROBLOX STUDIO
 
 This project uses [Rojo](https://rojo.space/) to sync local files with Roblox Studio. All scripts, modules, and local scripts are stored in `src/` and synced automatically.
 
-**Do not create scripts directly in Roblox Studio.** They will not sync to GitHub. Only create scripts in VS Code.
-
 Install Roblox Studio at: https://create.roblox.com/
 
 # Rojo Setup (ALWAYS DO STEP 5, 7 and 8)
@@ -38,3 +36,5 @@ Invoke-RestMethod https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/
 
 Example: Coins.server.luau → Script named `Coins` that runs on the Server
 Example: Camera.client.luau → LocalScript named `Camera` that runs on the Client
+
+**Do not create scripts directly in Roblox Studio.** They will not sync to GitHub. Only create scripts in VS Code.
