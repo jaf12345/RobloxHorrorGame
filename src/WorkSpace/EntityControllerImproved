@@ -1,0 +1,94 @@
+local entity = script.Parent --the entity model
+
+local RunService = game:GetService("RunService") -- more details on this service 
+
+local NPChumanoid = entity:WaitForChild("Humanoid") -- waiting for the humanoid model to spawn into the world
+local rootPart = entity:WaitForChild("HumanoidRootPart") --waiting for the core component of humanoid to be registerd
+
+local players = game:GetService("Players") --roblox servise to retrive all active playyers in game
+
+local state = 'Patrol' --fixed state varaibles 
+
+local function distanceTo(pos) --simple function to get distance in studs 
+	return (rootPart.Position - pos).Magnitude
+end
+
+local function getNearestPlayer(maxDistToPlyr) --modified the function to get nearest player
+	local nearest = nil
+	local nearestDist = maxDistToPlyr
+	
+	for _, plr in ipairs(players:GetPlayers()) do
+		local char = plr.Character
+		if char and char:FindFirstChild('HumanoidRootPart') then
+			local dist = distanceTo(char.HumanoidRootPart.Position)
+			
+			if dist < nearestDist then
+				nearestDist = dist
+				nearest = plr
+			end
+		end
+	end
+	return nearest
+end
+
+-- tuning enums 
+
+local PATROL_WAIT = 1
+local CHASE_RANGE = 60
+local ATTACK_RANGE = 4
+
+
+local wpFolder = workspace:WaitForChild("Waypoints") --loads waypoints folder
+local waypoints = wpFolder:GetChildren() --gets all the waypoints
+local currentWp = 1 --index for wpFolder
+
+while true do
+	if state == "Patrol" then
+		-- Check for player
+		local target = getNearestPlayer(CHASE_RANGE)
+		if target then
+			state = "Chase"
+		else
+			-- Move to next waypoint
+			local wp = waypoints[currentWp] --index 1 of wp
+			NPChumanoid:MoveTo(wp.Position)
+			NPChumanoid.MoveToFinished:Wait()
+			currentWp += 1
+			if currentWp > #waypoints then
+				currentWp = 1 --reset wp if compelted
+			end
+			wait(PATROL_WAIT)
+		end
+
+	elseif state == "Chase" then
+		local target = getNearestPlayer(CHASE_RANGE)
+		if not target then
+			-- Lost player
+			state = "Patrol"
+		else
+			-- Still see a player, get their position
+			local char = target.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local dist = distanceTo(hrp.Position)
+				if dist <= ATTACK_RANGE then
+					state = "Attack"
+				else
+					NPChumanoid:MoveTo(hrp.Position)
+					NPChumanoid.MoveToFinished:Wait(0.5)
+				end
+			else
+				state = "Patrol"
+			end
+		end
+
+	elseif state == "Attack" then
+		print("Jump scare now!")
+		-- later: trigger RemoteEvent for jumpscare, play animation
+		wait(1)
+		state = "Patrol"
+
+	end
+
+	RunService.Heartbeat:Wait() --updates throttle synced to game frames 
+end
