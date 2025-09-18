@@ -1,13 +1,36 @@
 local entity = script.Parent --the entity model
+local level = workspace.ExampleLevel -- reference of the level
 
 local RunService = game:GetService("RunService") -- more details on this service 
+local PathfindingService = game:GetService("PathfindingService") -- roblox's own service that helps with the npc's pathfinding
 
 local NPChumanoid = entity:WaitForChild("Humanoid") -- waiting for the humanoid model to spawn into the world
 local rootPart = entity:WaitForChild("HumanoidRootPart") --waiting for the core component of humanoid to be registerd
+local wpFolder = level:WaitForChild("Waypoints") --loads waypoints folder
+local waypoints = wpFolder:GetChildren() --gets all the waypoints
+local meshpoint = level:WaitForChild("Meshpoints"):GetChildren() --the point the npc walks to
+
+if rootPart then
+	rootPart:SetNetworkOwner(nil) -- makes the entity network owner to the server
+end
+
 
 local players = game:GetService("Players") --roblox servise to retrive all active playyers in game
 
+-- tuning enums 
+
+local PATROL_WAIT = 0.5
+local CHASE_RANGE = 40
+local ATTACK_RANGE = 4
+local ATTACK_DAMAGE = 20
+local ATTACK_COOLDOWN = 2
+
+local lastAttack = 0
+
+local currentWp = 1 --index for wpFolder
+
 local state = 'Patrol' --fixed state varaibles 
+
 
 local function distanceTo(pos) --simple function to get distance in studs 
 	return (rootPart.Position - pos).Magnitude
@@ -16,12 +39,12 @@ end
 local function getNearestPlayer(maxDistToPlyr) --modified the function to get nearest player
 	local nearest = nil
 	local nearestDist = maxDistToPlyr
-	
+
 	for _, plr in ipairs(players:GetPlayers()) do
 		local char = plr.Character
 		if char and char:FindFirstChild('HumanoidRootPart') then
 			local dist = distanceTo(char.HumanoidRootPart.Position)
-			
+
 			if dist < nearestDist then
 				nearestDist = dist
 				nearest = plr
@@ -31,64 +54,292 @@ local function getNearestPlayer(maxDistToPlyr) --modified the function to get ne
 	return nearest
 end
 
--- tuning enums 
+--- Collect waypoints and meshpoints
+local function combineMeshes()
+	local points = {}
+	local map = {}
+	for _, wpoint in ipairs(waypoints) do
+		table.insert(points, wpoint)
+	end
+	for _, mpoint in ipairs(meshpoint) do
+		table.insert(points, mpoint)
+	end
+	
+	for _, point in ipairs(points) do
+		map[point.Name] = point
+	end
+	
+	return points, map
+end
 
-local PATROL_WAIT = 1
-local CHASE_RANGE = 60
-local ATTACK_RANGE = 4
+local allpoints, meshMap = combineMeshes() -- returns a tables of all the points and a map of the points
 
+local function getNearestMesh()
+	local nearest = nil
+	local nearestDistance = math.huge
+	
+	for _, point in ipairs(allpoints) do
+		local dist = (entity.PrimaryPart.Position - point.Position).Magnitude
+		if dist < nearestDistance then
+			nearestDistance = dist
+			nearest = point
+		end
+	end
+	
+	return nearest
+end
 
-local wpFolder = workspace:WaitForChild("Waypoints") --loads waypoints folder
-local waypoints = wpFolder:GetChildren() --gets all the waypoints
-local currentWp = 1 --index for wpFolder
+-- graph of meshpoints, with room weights
+local graph = {
+["RoomA"] = {["RoomB"]=1, ["RoomC"]=2},
+["RoomB"] = {["RoomA"]=1, ["RoomC"]=1, ["Wp1"]=1},
+["RoomC"] = {["RoomA"]=2, ["RoomB"]=1},
+["Wp1"]  = {["RoomB"]=1}
+}
+
+local function dijkstra(graph, startNode, goalNode)
+	local distances = {}
+	local previous = {}
+	local visited = {}
+	
+	for node,_ in pairs(graph) do
+		distances[node] = math.huge
+		previous[node] = nil
+	end
+	distances[startNode] = 0
+
+	while true do
+		
+		local closest = nil
+		local closestDistance = math.huge
+
+		for node, dist in pairs(distances) do
+			if not visited[node] and dist < closestDistance then
+				closest = node
+				closestDistance = dist
+			end
+		end
+
+		if not closest then 
+			break 
+		end
+
+		if closest == goalNode then
+			break
+		end
+
+		visited[closest] = true
+
+		for neighbour, weight in pairs(graph[closest]) do
+			local newDist = distances[closest] + weight
+			if newDist < distances[neighbour] then
+				distances[neighbour] = newDist
+				previous[neighbour] = closest
+			end
+		end
+	end
+
+	local path = {}
+	local current = goalNode
+	while current do
+		table.insert(path, 1, current)
+		current = previous[current]
+	end
+
+	return path
+end
 
 while true do
+	-- Check for player
+	local target = getNearestPlayer(CHASE_RANGE)
 	if state == "Patrol" then
-		-- Check for player
-		local target = getNearestPlayer(CHASE_RANGE)
 		if target then
 			state = "Chase"
 		else
 			-- Move to next waypoint
 			local wp = waypoints[currentWp] --index 1 of wp
 			NPChumanoid:MoveTo(wp.Position)
-			NPChumanoid.MoveToFinished:Wait()
-			currentWp += 1
-			if currentWp > #waypoints then
-				currentWp = 1 --reset wp if compelted
+			
+			local reached = false
+			
+			-- check if the NPC reached the waypoint
+			local connection
+			connection = NPChumanoid.MoveToFinished:Connect(function(success)
+				reached = true
+				connection:Disconnect()
+			end) 
+			
+			
+			while not reached do
+				-- checks for player while traversing patrol points
+				local newTarget = getNearestPlayer(CHASE_RANGE)
+				if newTarget then
+					-- sets state to chase and stops moving to waypoint
+					state = "Chase"
+					if connection then connection:Disconnect() end
+					break
+				end
+				task.wait(0.1)
 			end
-			wait(PATROL_WAIT)
+			
+			-- if state is patrol, move to next waypoint
+			if state == "Patrol" then
+				currentWp += 1
+				if currentWp > #waypoints then
+					currentWp = 1 --reset wp if completed
+				end
+				wait(PATROL_WAIT)
+			end
 		end
 
 	elseif state == "Chase" then
-		local target = getNearestPlayer(CHASE_RANGE)
+		-- if no target is found, return state
 		if not target then
-			-- Lost player
-			state = "Patrol"
+			state = "Return"
 		else
-			-- Still see a player, get their position
-			local char = target.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			local char = target.Character -- get the character of the target
+			local hrp = char and char:FindFirstChild("HumanoidRootPart") -- get the humanoid root part of the target player
 			if hrp then
-				local dist = distanceTo(hrp.Position)
+				local dist = (NPChumanoid.RootPart.Position - hrp.Position).Magnitude -- calculate distance between NPC and player
+
+				-- attack switch
 				if dist <= ATTACK_RANGE then
 					state = "Attack"
+					
+				-- chase logic
 				else
-					NPChumanoid:MoveTo(hrp.Position)
-					NPChumanoid.MoveToFinished:Wait(0.5)
+					-- used to check if there is a wall in front of the NPC 
+					local direction = (hrp.Position - NPChumanoid.RootPart.Position).Unit
+					local ray = Ray.new(NPChumanoid.RootPart.Position, direction * 3)
+					local hit = workspace:FindPartOnRay(ray, NPChumanoid.Parent)
+
+					-- Wall detected: path around
+					if hit then
+						local path = PathfindingService:CreatePath({
+							AgentRadius = 2,
+							AgentHeight = 5,
+							CanJump = false,
+							WaypointSpacing = 4
+						})
+						
+						-- to catch errors
+						local success, err = pcall(function()
+							-- computes the path between the NPC and the player
+							path:ComputeAsync(NPChumanoid.RootPart.Position, hrp.Position)
+						end)
+						
+						
+						if path.Status == Enum.PathStatus.Success and success then
+							-- follow the path to the players waypoints
+							for _, wp in ipairs(path:GetWaypoints()) do
+								NPChumanoid:MoveTo(wp.Position)
+								NPChumanoid.MoveToFinished:Wait(0.2)
+								-- if player in range, attack!
+								if (hrp.Position - NPChumanoid.RootPart.Position).Magnitude <= ATTACK_RANGE then
+									state = "Attack"
+									break
+								end
+							end
+						end
+					else
+						-- No wall: simple MoveTo update
+						NPChumanoid:MoveTo(hrp.Position)
+						task.wait(0.2)
+					end
 				end
 			else
+				-- if no humanoid root part, return to patrol
 				state = "Patrol"
 			end
 		end
-
+	-- attack logic
 	elseif state == "Attack" then
 		print("Jump scare now!")
-		-- later: trigger RemoteEvent for jumpscare, play animation
+		if target then
+			local char = target.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			local hum = char and char:FindFirstChild("Humanoid")
+
+			if hrp and hum then
+				--check cooldown timer
+				if tick() - lastAttack >= ATTACK_COOLDOWN then
+					hum:TakeDamage(ATTACK_DAMAGE)
+					-- TEMPORARY COMMENTED OUT: print('Entity attacked: '..target.Name..'for'..ATTACK_DAMAGE..'damage!')
+					lastAttack = tick()
+				end
+			end
+		end
+
 		wait(1)
 		state = "Patrol"
-
+	
+	-- return logic
+	elseif state == "Return" then
+		local nearestMesh = getNearestMesh() --gets the closest mesh to the entity
+		
+		if nearestMesh.Name == 'Wp1' or nearestMesh.Name == 'Wp2' or nearestMesh.Name == 'Wp3' then
+			state = "Patrol" --if the closest mesh is a waypoint, return to patrol
+			currentWp = 1 --reset wp if completed
+		else
+			local pathNodes = dijkstra(graph, nearestMesh.Name, "Wp1") --returns a table that contains the path to the patrol point
+			print("Pathback:",table.concat(pathNodes)) -- testing only
+			
+			local foundTarget = false
+			
+			-- follow the path to the nearest mesh
+			for i = 1, #pathNodes-1 do
+				local startNode = meshMap[pathNodes[i]] -- current node
+				local endNode = meshMap[pathNodes[i+1]] -- next node
+				
+				-- pathing logic
+				if startNode and endNode then 
+					-- check for players in range, in case player is in range again, chase them
+					local target = getNearestPlayer(CHASE_RANGE)
+					
+					-- set to chase state
+					if target then
+						state = "Chase"
+						foundTarget = true
+						break
+					end
+					
+					local path = PathfindingService:CreatePath()
+					
+					-- pcall() to catch errors
+					local success, err = pcall(function()
+						-- computes the path between the NPC and the player
+						path:ComputeAsync(startNode.Position, endNode.Position)
+					end)
+					
+					-- outputs failure of path computation (for testing)
+					if not success then
+						warn("Path compute failed:", err)
+						continue
+					end
+					
+					-- get waypoints and move through them
+					local waypoints = path:GetWaypoints()
+					for _, wp in ipairs(waypoints) do
+						local target = getNearestPlayer(CHASE_RANGE)
+						if target then
+							state = "Chase"
+							foundTarget = true
+							break
+						end
+						
+						NPChumanoid:MoveTo(wp.Position)
+						NPChumanoid.MoveToFinished:Wait(0.05)
+					end
+				else
+					warn("Start or end node not found:", pathNodes[i], pathNodes[i+1])
+				end
+			end
+			-- set state back to patrol after returning to patrol point
+			state = "Patrol"
+			currentWp = 1
+		end
 	end
-
+	
+	task.wait(0.05)
 	RunService.Heartbeat:Wait() --updates throttle synced to game frames 
 end
