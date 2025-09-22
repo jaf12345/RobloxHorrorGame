@@ -1,0 +1,113 @@
+
+local healingAmount = 25 -- how much health the item restores
+local debounceTime = 2   -- cooldown so it can’t be spammed
+local part = script.Parent
+
+local debounce = {}
+
+part.Touched:Connect(function(hit)
+    local character = hit.Parent
+    local humanoid = character:FindFirstChild("Humanoid")
+
+    if humanoid and humanoid.Health < humanoid.MaxHealth then
+        local player = game.Players:GetPlayerFromCharacter(character)
+
+        if player and not debounce[player] then
+            debounce[player] = true
+            
+            -- Heal the player
+            humanoid.Health = math.min(humanoid.Health + healingAmount, humanoid.MaxHealth)
+
+            -- Optional: destroy the item after use
+            -- part:Destroy()
+
+            -- Reset debounce after a delay
+            task.delay(debounceTime, function()
+                debounce[player] = nil
+            end)
+        end
+    end
+end)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local tool = script.Parent
+local projectileTemplate = tool:WaitForChild("Projectile") -- the projectile Part inside the tool
+local speed = 150 -- projectile speed
+local lifetime = 5 -- seconds before projectile auto-destroys
+local damage = 20 -- how much damage it deals
+
+-- Fires when tool is activated (clicked)
+tool.Activated:Connect(function()
+    local character = tool.Parent
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+
+    if humanoidRootPart then
+        -- Clone the projectile
+        local projectile = projectileTemplate:Clone()
+        projectile.Parent = workspace
+        projectile.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -2) -- spawn in front of player
+
+        -- Give it velocity forward
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Velocity = humanoidRootPart.CFrame.LookVector * speed
+        bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        bodyVelocity.Parent = projectile
+
+        -- Damage on hit
+        projectile.Touched:Connect(function(hit)
+            local targetHumanoid = hit.Parent:FindFirstChild("Humanoid")
+            if targetHumanoid and hit.Parent ~= character then
+                targetHumanoid:TakeDamage(damage)
+                projectile:Destroy()
+            end
+        end)
+
+        -- Auto-remove after lifetime
+        game:GetService("Debris"):AddItem(projectile, lifetime)
+    end
+end)
+
+
+
+
+local item = script.Parent
+local pickupValue = 10 -- example: could be coins, points, or healing
+
+item.Touched:Connect(function(hit)
+    local character = hit.Parent
+    local player = game.Players:GetPlayerFromCharacter(character)
+
+    if player then
+        -- Example: heal if item is a medkit
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.Health = math.min(humanoid.Health + pickupValue, humanoid.MaxHealth)
+        end
+
+        -- Or add leaderstats currency:
+        -- local stats = player:FindFirstChild("leaderstats")
+        -- if stats then
+        --     stats.Coins.Value += pickupValue
+        -- end
+
+        -- Remove the item after pickup
+        item:Destroy()
+    end
+end)
+
+
