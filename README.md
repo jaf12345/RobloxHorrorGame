@@ -2,7 +2,7 @@ Project Title: Protocol:Ascend
 
 Description: Protocol:Ascend is a puzzle horror game about a group of scientists, working alongside the military, secretly carried out experiments on an unsuspecting island population. During their investigation of an underground facility, the scientists are knocked out and find themselves trapped on the lowest level. The facility spans 2–3 underground floors, each crawling with hostile mutants. The scientists must now survive the horrors of this facility, all while finding the keycards to escape their imminent deaths and find their way back to the surface.
 
-Installationm Instructions: First make a account at https://www.roblox.com/CreateAccount, then use 'git clone https://github.com/jaf12345/RobloxHorrorGame' to clone the project repository into an folder on your system. You will also need to make sure Roblox Studio is installed, which can be installed from https://create.roblox.com/docs/studio/setup, for Windows and MacOS systems.
+Installation Instructions: First make a account at https://www.roblox.com/CreateAccount, then use 'git clone https://github.com/jaf12345/RobloxHorrorGame' to clone the project repository into an folder on your system. You will also need to make sure Roblox Studio is installed, which can be installed from https://create.roblox.com/docs/studio/setup, for Windows and MacOS systems.
 
 Usage Instructions: To run the game open up the 'ProtocolAscend.rblx' file using Roblox Studio (to install Roblox Studio go to https://create.roblox.com/docs/studio/setup). Once in Roblox Studio go to the 'Home', then in the top left click the blue play button.
 
