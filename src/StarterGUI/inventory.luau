@@ -1,198 +1,202 @@
---// SERVICES
+-- custom inventory ui (client)
+-- replaces default roblox hotbar, adds search + scroll cycle
+
+-- services
 local StarterGui = game:GetService("StarterGui")
-local ContextActionService = game:GetService("ContextActionService")
-local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
+local CAS        = game:GetService("ContextActionService")
+local UIS        = game:GetService("UserInputService")
+local Players    = game:GetService("Players")
 
---// REFERENCES
-local player = Players.LocalPlayer
+-- player refs
+local player   = Players.LocalPlayer
 local backpack = player:WaitForChild("Backpack")
-local camera = workspace.CurrentCamera
+local camera   = workspace.CurrentCamera
 
--- Disable the default Roblox hotbar UI
+-- kill default backpack UI
 StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 
-local CustomInventoryGUI = script.Parent
-local hotBar = CustomInventoryGUI.hotBar
-local Inventory = CustomInventoryGUI.Inventory
-local toolButton = script.toolButton
+-- ui bits
+local GuiRoot   = script.Parent
+local Hotbar    = GuiRoot.hotBar
+local Inventory = GuiRoot.Inventory
+local SlotProto = script.toolButton
 
--- External settings/logic module (do not rename)
+-- external module (don’t rename)
 local inventoryHandler = require(script.SETTINGS)
 
--- UI HELPERS
+-- ========= helpers =========
 
--- Create empty hotbar slot frames up to slotAmount (only if missing)
-local function renderEmptySlots()
-	for slotIdx = 1, inventoryHandler.slotAmount do
-		local slotObj = inventoryHandler.OBJECTS.HotBar[slotIdx]
-		if not slotObj and not hotBar:FindFirstChild(slotIdx) and slotIdx <= inventoryHandler.slotAmount then
-			local slotFrame = toolButton:Clone()
-			slotFrame.toolName.Text = ""
-			slotFrame.toolAmount.Text = ""
-			slotFrame.toolNumber.Text = slotIdx
-			slotFrame.Name = slotIdx
-			slotFrame.Parent = hotBar
+-- make missing empty slots (visual only)
+local function spawnEmptySlots()
+	for i = 1, inventoryHandler.slotAmount do
+		local slotData = inventoryHandler.OBJECTS.HotBar[i]
+		if not slotData and not Hotbar:FindFirstChild(i) then
+			local f = SlotProto:Clone()
+			f.toolName.Text   = ""
+			f.toolAmount.Text = ""
+			f.toolNumber.Text = i
+			f.Name = i
+			f.Parent = Hotbar
 		end
 	end
 end
 
--- Remove hotbar slot frames that no longer have tools
-local function pruneEmptySlots()
-	for slotIdx = 1, 9 do
-		local slotObj = inventoryHandler.OBJECTS.HotBar[slotIdx]
-		local slotFrame = hotBar:FindFirstChild(slotIdx)
-		if not slotObj and slotFrame then
-			slotFrame:Destroy()
-			-- If anything shifted, re-run to catch cascading gaps
-			if hotBar:FindFirstChild(slotIdx) then
-				pruneEmptySlots()
+-- remove empty frames (keep ones with tools)
+local function cleanEmptySlots()
+	for i = 1, 9 do
+		local slotData = inventoryHandler.OBJECTS.HotBar[i]
+		local frame    = Hotbar:FindFirstChild(i)
+		if not slotData and frame then
+			frame:Destroy()
+			-- if something shifted, run again to catch gaps
+			if Hotbar:FindFirstChild(i) then
+				cleanEmptySlots()
 			end
 		end
 	end
 end
 
--- Toggle inventory visibility and update helper UI bits
-local function toggleInventory(_, inputState)
+-- open/close big inventory panel
+local function toggleInvUI(_, inputState)
 	if inputState == Enum.UserInputState.Begin then
 		Inventory.Visible = not Inventory.Visible
-		local isOpen = Inventory.Visible
+		local open = Inventory.Visible
 
 		inventoryHandler:removeCurrentDescription()
 
-		if isOpen then
-			renderEmptySlots()
-			CustomInventoryGUI.openButton.Position = UDim2.fromScale(0.5, 0.5)
-			CustomInventoryGUI.openButton.info.Text = "(') close inventory"
+		if open then
+			spawnEmptySlots()
+			GuiRoot.openButton.Position = UDim2.fromScale(0.5, 0.5)
+			GuiRoot.openButton.info.Text = "(') close inventory"
 		else
 			if not inventoryHandler.SETTINGS.SHOW_EMPTY_TOOL_FRAMES_IN_HOTBAR then
-				pruneEmptySlots()
+				cleanEmptySlots()
 			end
-			CustomInventoryGUI.openButton.Position = UDim2.fromScale(0.5, 0.909)
-			CustomInventoryGUI.openButton.info.Text = "(') open inventory"
+			GuiRoot.openButton.Position = UDim2.fromScale(0.5, 0.909)
+			GuiRoot.openButton.info.Text = "(') open inventory"
 		end
 
-	-- This branch mirrors your original logic (kept intact, though it’s effectively a no-op)
+	-- keep this branch (even though it's basically a no-op)
 	elseif not inputState then
-		for slotIdx = inventoryHandler.slotAmount + 1, inventoryHandler.slotAmount do
-			local slotObj = inventoryHandler.OBJECTS.HotBar[slotIdx]
-			local slotFrame = hotBar:FindFirstChild(slotIdx)
-			if slotObj then
-				local tool = slotObj.Tool
-				slotObj:DisconnectAll()
+		for i = inventoryHandler.slotAmount + 1, inventoryHandler.slotAmount do
+			local slotData = inventoryHandler.OBJECTS.HotBar[i]
+			local frame    = Hotbar:FindFirstChild(i)
+			if slotData then
+				local tool = slotData.Tool
+				slotData:DisconnectAll()
 				tool:SetAttribute("toolAdded", nil)
 				inventoryHandler:newTool(tool)
-			elseif slotFrame then
-				slotFrame:Destroy()
+			elseif frame then
+				frame:Destroy()
 			end
 		end
 	end
 end
 
--- Live-search callback for the inventory search box
-local function onSearchChanged()
+-- search box changed
+local function handleSearch()
 	inventoryHandler:searchTool()
 end
 
--- Wrapper to register a new Tool with the handler
-local function addTool(tool)
-	if tool:IsA("Tool") then
-		inventoryHandler:newTool(tool)
+-- register a tool with the module
+local function registerTool(t)
+	if t:IsA("Tool") then
+		inventoryHandler:newTool(t)
 	end
 end
 
--- Re-scan the character/backpack and hook listeners after respawn
-local function rebuildInventoryCache(character)
+-- after respawn: rescan backpack + listen for new tools
+local function rescanInventory(char)
 	inventoryHandler.currentlyEquipped = nil
 	backpack = player:WaitForChild("Backpack")
 
-	for _, tool in pairs(backpack:GetChildren()) do
-		if tool:IsA("Tool") then
-			addTool(tool)
+	for _, t in ipairs(backpack:GetChildren()) do
+		if t:IsA("Tool") then
+			registerTool(t)
 		end
 	end
 
-	backpack.ChildAdded:Connect(addTool)
-	character.ChildAdded:Connect(addTool)
+	backpack.ChildAdded:Connect(registerTool)
+	char.ChildAdded:Connect(registerTool)
 end
 
--- Update grid cell sizes based on viewport; also ensures UI state is consistent
-local function updateHudLayout()
-	-- We don't need the actual size value here, but reading the property
-	-- ensures this runs on viewport changes.
-	local _ = camera.ViewportSize
+-- adjust grid sizes when window changes; also re-sync open/close text
+local function refreshHUD()
+	local _ = camera.ViewportSize -- read to bind
 
-	local slotSize = UDim2.fromOffset(hotBar.AbsoluteSize.Y, hotBar.AbsoluteSize.Y)
-	Inventory.Frame.Grid.CellSize = slotSize
-	hotBar.Grid.CellSize = slotSize
+	local size = UDim2.fromOffset(Hotbar.AbsoluteSize.Y, Hotbar.AbsoluteSize.Y)
+	Inventory.Frame.Grid.CellSize = size
+	Hotbar.Grid.CellSize = size
 
-	-- Keep UI hints in sync (uses same logic as toggling without input)
-	toggleInventory()
+	-- sync the button label/position
+	toggleInvUI()
 end
 
+-- currently equipped tool on the character
+local function currentTool()
+	local char = player.Character
+	return char and char:FindFirstChildOfClass("Tool")
+end
 
--- INITIALIZE + CONNECTIONS
+-- ========= init =========
 
-updateHudLayout(); updateHudLayout()
-rebuildInventoryCache(player.Character or player.CharacterAdded:Wait())
+-- do layout twice to settle sizes
+refreshHUD(); refreshHUD()
+rescanInventory(player.Character or player.CharacterAdded:Wait())
 
-camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateHudLayout)
-player.CharacterAdded:Connect(rebuildInventoryCache)
-Inventory.SearchBox:GetPropertyChangedSignal("Text"):Connect(onSearchChanged)
+-- hooks
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshHUD)
+player.CharacterAdded:Connect(rescanInventory)
+Inventory.SearchBox:GetPropertyChangedSignal("Text"):Connect(handleSearch)
 
 if inventoryHandler.SETTINGS.SHOW_EMPTY_TOOL_FRAMES_IN_HOTBAR then
-	renderEmptySlots()
+	spawnEmptySlots()
 end
 
 if inventoryHandler.SETTINGS.INVENTORY_KEYBIND then
-	ContextActionService:BindAction("manageInventory", toggleInventory, false, inventoryHandler.SETTINGS.INVENTORY_KEYBIND)
+	CAS:BindAction("manageInventory", toggleInvUI, false, inventoryHandler.SETTINGS.INVENTORY_KEYBIND)
 end
 
 if inventoryHandler.SETTINGS.OPEN_BUTTON then
-	CustomInventoryGUI.openButton.MouseButton1Down:Connect(function()
+	GuiRoot.openButton.MouseButton1Down:Connect(function()
 		Inventory.Visible = not Inventory.Visible
-		local isOpen = Inventory.Visible
+		local open = Inventory.Visible
 
 		inventoryHandler:removeCurrentDescription()
 
-		if isOpen then
-			renderEmptySlots()
-			CustomInventoryGUI.openButton.Position = UDim2.fromScale(0.5, 0.5)
-			CustomInventoryGUI.openButton.info.Text = "(') close inventory"
+		if open then
+			spawnEmptySlots()
+			GuiRoot.openButton.Position = UDim2.fromScale(0.5, 0.5)
+			GuiRoot.openButton.info.Text = "(') close inventory"
 		else
 			if not inventoryHandler.SETTINGS.SHOW_EMPTY_TOOL_FRAMES_IN_HOTBAR then
-				pruneEmptySlots()
+				cleanEmptySlots()
 			end
-			CustomInventoryGUI.openButton.Position = UDim2.fromScale(0.5, 0.909)
-			CustomInventoryGUI.openButton.info.Text = "(') open inventory"
+			GuiRoot.openButton.Position = UDim2.fromScale(0.5, 0.909)
+			GuiRoot.openButton.info.Text = "(') open inventory"
 		end
 	end)
 else
-	CustomInventoryGUI.openButton.Visible = false
+	GuiRoot.openButton.Visible = false
 end
 
--- INPUT: SCROLL TO CYCLE HOTBAR TOOLS
+-- ========= scroll wheel: cycle hotbar =========
+UIS.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseWheel
+		and inventoryHandler.SETTINGS.SCROLL_HOTBAR_WITH_WHEEL then
 
--- Helper to get currently equipped tool (character-safe)
-local function getEquippedTool()
-	local character = player.Character
-	return character and character:FindFirstChildOfClass("Tool")
-end
+		local step = input.Position.Z -- +1 or -1
+		local char = player.Character
+		local hum  = char and char:FindFirstChildOfClass("Humanoid")
 
-UserInputService.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseWheel and inventoryHandler.SETTINGS.SCROLL_HOTBAR_WITH_WHEEL then
-		local scrollDir = input.Position.Z -- positive or negative step
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local equipped  = currentTool()
+		local pos = inventoryHandler:getToolPosition(equipped) or 0
 
-		local equipped = getEquippedTool()
-		local currentPos = inventoryHandler:getToolPosition(equipped) or 0
-
-		-- Walk forward or backward across slots based on scroll direction
-		for slotIdx = currentPos + scrollDir, (scrollDir < 0) and 1 or inventoryHandler.slotAmount, scrollDir do
-			local slotObj = inventoryHandler.OBJECTS.HotBar[slotIdx]
-			if slotObj and humanoid then
-				humanoid:EquipTool(slotObj.Tool)
+		-- walk forward/backward depending on wheel direction
+		for i = pos + step, (step < 0) and 1 or inventoryHandler.slotAmount, step do
+			local slotData = inventoryHandler.OBJECTS.HotBar[i]
+			if slotData and hum then
+				hum:EquipTool(slotData.Tool)
 				break
 			end
 		end
