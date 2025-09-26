@@ -15,10 +15,10 @@ local runSpeed = 28
 local defaultfieldofview = 70
 
 
-local stamina = 500
-local maxStamina = 500
-local staminaDrain = 30
-local staminaRegen = 50
+local stamina = 100
+local maxStamina = 100
+local staminaDrain = 20
+local staminaRegen = 10
 local canSprint = true
 local sprinting = false
 
