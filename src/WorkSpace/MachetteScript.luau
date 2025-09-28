@@ -106,7 +106,7 @@ local function stun(hum, secs)
 	tag.Value = tick() + secs
 	tag.Parent = hum
 
-	-- save old move stuff
+
 	local useJP = hum.UseJumpPower
 	local oldSpeed = hum.WalkSpeed
 	local oldJump  = useJP and hum.JumpPower or hum.JumpHeight
