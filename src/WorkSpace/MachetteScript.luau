@@ -197,7 +197,6 @@ local function onTouch(part)
 	-- hit sound
 	sfx.hit:Play()
 
-	-- keep original anchoring tweak
 	local n = string.lower(part.Name)
 	if (not string.find(n, "root") and ((string.find(n, "torso") or string.find(n, "head")) and Random.new():NextNumber(0, 100) <= 50))
 		or (not string.find(n, "torso") and not string.find(n, "head") and not string.find(n, "root")) then
