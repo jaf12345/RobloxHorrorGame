@@ -254,24 +254,32 @@ while true do
 		end
 	-- attack logic
 	elseif state == "Attack" then
-		print("Jump scare now!")
-		if target then
-			local char = target.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			local hum = char and char:FindFirstChild("Humanoid")
+	print("Jump scare now!")
 
-			if hrp and hum then
-				--check cooldown timer
-				if tick() - lastAttack >= ATTACK_COOLDOWN then
-					hum:TakeDamage(ATTACK_DAMAGE)
-					-- TEMPORARY COMMENTED OUT: print('Entity attacked: '..target.Name..'for'..ATTACK_DAMAGE..'damage!')
-					lastAttack = tick()
+	local ReplicatedStorage = game:GetService("ReplicatedStorage") --need to acess replicated storage for GUI event from server
+	local jumpscareEvent = ReplicatedStorage:WaitForChild("JumpScareEvent") --acessesing remote event
+
+	if target then
+		local char = target.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local hum = char and char:FindFirstChild("Humanoid")
+
+		if hrp and hum then
+			if tick() - lastAttack >= ATTACK_COOLDOWN then
+				hum:TakeDamage(ATTACK_DAMAGE)
+				lastAttack = tick()
+
+				-- Trigger the jumpscare
+				local player = game.Players:GetPlayerFromCharacter(char)
+				if player then
+					jumpscareEvent:FireClient(player) --fires event to player to trigger jumpscare
 				end
 			end
 		end
+	end
 
-		wait(1)
-		state = "Patrol"
+	wait(1)
+	state = "Patrol"
 	
 	-- return logic
 	elseif state == "Return" then
