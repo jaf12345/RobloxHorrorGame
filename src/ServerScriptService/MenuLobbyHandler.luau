@@ -152,9 +152,8 @@ task.spawn(function()
 						print("box", id, "ready with", #state.players, "players")
 
 						-- teleport players in the box
-						task.wait(2)
 						
-						local PLACE_ID = 84732453282934
+						local PLACE_ID = 140078118155277
 						
 						-- create a private server and get the access code
 						local privateServerCode, privateServerId = TeleportService:ReserveServer(PLACE_ID)
