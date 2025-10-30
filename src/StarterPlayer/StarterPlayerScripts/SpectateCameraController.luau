@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -29,6 +30,14 @@ spectateTarget.Parent = workspace
 
 local currentTargetPlayer = nil
 local LERP_SPEED = 5
+
+local turn = 0
+local bobTime = 0
+local lastPositon = nil
+
+local function Lerp(a, b, t)
+	return a + (b - a) * t
+end
 
 -- update the GUI label and camera subject
 local function updateSpectateTarget()
@@ -116,6 +125,7 @@ local function setupCharacter(char)
 	local humanoid = char:WaitForChild("Humanoid")
 	local rootPart = char:WaitForChild("Head")
 
+	humanoid.CameraOffset = Vector3.new(0, 0, -1) -- change offset in first person
 	humanoid.Died:Connect(function()
 		-- on death, allow zoom-out
 		player.CameraMode = Enum.CameraMode.Classic
@@ -135,10 +145,57 @@ RunService.RenderStepped:Connect(function(deltaTime)
 		player.CameraMaxZoomDistance = newZoom
 	end
 	
+	
 	-- lerp to the target player for added smoothness
 	if currentTargetPlayer and currentTargetPlayer.Character and currentTargetPlayer.Character:FindFirstChild("Head") then
 		local targetPos = currentTargetPlayer.Character.Head.Position
 		spectateTarget.CFrame = spectateTarget.CFrame:Lerp(CFrame.new(targetPos), math.clamp(deltaTime * LERP_SPEED, 0, 1))
+	end
+	
+	if player.Character and camera.CameraSubject == player.Character:FindFirstChild("Humanoid") then
+		local humanoid = player.Character:FindFirstChild("Humanoid")
+		local root = player.Character:FindFirstChild("HumanoidRootPart")
+		if humanoid and root then
+			-- sideways mouse tilt
+			local MouseDelta = UserInputService:GetMouseDelta()
+			
+
+			-- detect movement speed using position difference
+			local currentPos = root.Position
+			local moveDist = 0 
+			if lastPositon then
+				 moveDist = (currentPos - lastPositon).Magnitude
+			end
+			lastPositon = currentPos
+
+			turn = Lerp(turn, math.clamp(MouseDelta.X, -7.5, 7.5), (7 * deltaTime))
+			
+			bobTime += moveDist + deltaTime * 2
+			bobTime = math.fmod(bobTime, math.pi * 2)
+			
+			-- get the cameras forward direction
+			local forward = camera.CFrame.LookVector
+
+			-- calculate pitch
+			local pitch = math.asin(forward.Y)  
+
+			-- convert pitch to degrees and get the absolute value
+			local pitchDegrees = math.abs(math.deg(pitch))
+
+			-- calculate bob amplitude based on pitch
+			local bobAmplitude = (90 - pitchDegrees) / 90
+
+			-- calculate vertical bob offset
+			local bobHeight = math.sin(bobTime) * (0.10 * bobAmplitude) -- amplitude and frequency
+			local bobOffset = Vector3.new(0, bobHeight, 0)
+			
+			
+			-- apply final camera transform
+			camera.CFrame = camera.CFrame
+				* CFrame.Angles(0, 0, math.rad(turn))
+				* CFrame.new(bobOffset)
+			
+		end
 	end
 end)
 
