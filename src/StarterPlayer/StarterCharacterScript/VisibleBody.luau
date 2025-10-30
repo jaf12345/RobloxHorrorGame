@@ -1,13 +1,18 @@
 local player = game.Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local camera = workspace.CurrentCamera
+local runService = game:GetService("RunService")
 
--- hide head in the first person view
+-- function to get the current head safely
+local function getHead()
+	return character:FindFirstChild("Head")
+end
+
+-- hide head in first person
 local function hideHead()
-	for _, part in ipairs(character:GetChildren()) do
-		if part:IsA("BasePart") and part.Name == "Head" then
-			part.LocalTransparencyModifier = 1
-		end
+	local head = getHead()
+	if head and head:IsA("BasePart") then
+		head.LocalTransparencyModifier = 1
 	end
 end
 
@@ -20,9 +25,19 @@ local function showBody()
 	end
 end
 
--- update based on camera position
-game:GetService("RunService").RenderStepped:Connect(function()
-	local distance = (camera.CFrame.Position - character.Head.Position).Magnitude
+-- listen for character respawn
+player.CharacterAdded:Connect(function(newChar)
+	character = newChar
+end)
+
+-- main loop
+runService.RenderStepped:Connect(function()
+	local head = getHead()
+	if not head then
+		return -- wait until head exists
+	end
+
+	local distance = (camera.CFrame.Position - head.Position).Magnitude
 
 	if distance <= 2 then
 		hideHead()
