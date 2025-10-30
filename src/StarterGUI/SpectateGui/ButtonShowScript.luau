@@ -2,8 +2,13 @@
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-local cameraFrame = script.Parent:WaitForChild("cameraButtonFrame")
+local cameraFrame = script.Parent:WaitForChild("controlFrame")
+local currentPlayerLabel = cameraFrame:WaitForChild("CurrentPlayer")
+
 cameraFrame.Visible = false -- hide at the start
+
+-- start with self name
+currentPlayerLabel.Text = "Spectating: " .. player.Name
 
 -- wait for the character to load
 local function setupCharacter(char)
