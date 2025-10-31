@@ -1,0 +1,19 @@
+-- Handles buying an item from the shop UI
+local player = script.Parent.Parent.Parent.Parent.Parent.Parent.Parent
+
+script.Parent.Buy.MouseButton1Click:Connect(function()
+	-- make sure the player has enough cash
+	local itemData = game.ServerStorage.Item:FindFirstChild(script.Parent.Name)
+	if not itemData then return end
+	
+	local price = itemData.Price.Value
+	local stats = player:FindFirstChild("leaderstats")
+
+	if stats and stats:FindFirstChild("Cash") then
+		local cash = stats.Cash
+		if cash.Value >= price then
+			cash.Value -= price
+			itemData:Clone().Parent = player.Backpack
+		end
+	end
+end)
