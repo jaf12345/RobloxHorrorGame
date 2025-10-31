@@ -1,0 +1,80 @@
+-- references
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local button = script.Parent
+local prompt = button:WaitForChild("ProximityPrompt")
+local elevator = game.Workspace:WaitForChild("Elevator")
+local leftDoor = elevator:WaitForChild("LeftDoor")
+local rightDoor = elevator:WaitForChild("RightDoor")
+local entry = elevator:WaitForChild("Entry")
+
+-- sound tuning
+local openSound = game.ReplicatedStorage.ElevatorOpen
+openSound.PlaybackSpeed = 1.5
+
+--world ID's —used to teleport players
+CURRENT_ID = "100629291619558"
+DESTINATION_ID = "132909280861855"
+
+-- teleports any players that happened to be outside the elvator after the elevator door is closed
+local function teleportPlayersInside()
+	local inside = {} -- table to store players for level transition later on
+	-- teleports each player inside the elevator just to ensure no one is left out
+	for _, player in (Players:GetPlayers()) do
+		-- retreives player character
+		local char = player.Character
+		if not char then continue end -- checks if character exists
+		-- retreives player root part
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then continue end -- checks if root part exists
+		
+		local playerTP = entry.CFrame * CFrame.new(0, 1, 0) -- location to teleport player
+		root.CFrame = playerTP -- places player in the elavator
+		table.insert(inside, player)-- adds player to table
+	end
+	return inside -- returns table of players
+end
+
+local function levelTransition(players)
+	-- checks if players count equals zero
+	if #players == 0 then return end
+	
+	-- telport players all players
+	local success, result = pcall(function()
+		return TeleportService:TeleportAsync(DESTINATION_ID, players)
+	end)
+	
+	-- if teleport fails, print error
+	if not success then
+		warn("Teleport failed:", result)
+	end
+end
+
+-- function to close doors
+local function closeDoors()
+	-- goal positions
+	local leftGoal = {Position = leftDoor.Position - Vector3.new(0,0,5.3)}
+	local rightGoal = {Position = rightDoor.Position + Vector3.new(0,0,5.3)}
+	
+	-- gather tween info
+	local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+	task.wait(0.5)
+	openSound:Play()
+	
+	-- using tween service to animate doors
+	TweenService:Create(leftDoor, tweenInfo, leftGoal):Play()
+	TweenService:Create(rightDoor, tweenInfo, rightGoal):Play()
+	prompt.Enabled = false
+end
+
+
+-- trigger function closes doors and teleports players
+prompt.Triggered:Connect(function()
+	closeDoors()
+	task.wait(1)
+	local players = teleportPlayersInside()
+	levelTransition(players)
+end)
+
+
