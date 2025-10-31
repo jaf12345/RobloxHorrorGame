@@ -2,6 +2,6 @@
 local part = script.Parent
 
 while true do
-	task.wait() -- small pause to keep it smooth
+	task.wait() -- small pause
 	part.CFrame *= CFrame.fromEulerAnglesXYZ(0.1, 0, 0)
 end
